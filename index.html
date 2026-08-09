@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bill & Warranty Vault</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #0f172a;
+      --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+    }
+    header {
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+    .card {
+      background: var(--surface);
+      padding: 1.5rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    form {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    label { font-weight: 600; font-size: 0.85rem; }
+    input, select, button {
+      padding: 0.6rem 0.8rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { opacity: 0.9; }
+    .item-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: white;
+      margin-bottom: 0.75rem;
+    }
+    .badge {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      margin-left: 0.5rem;
+      font-weight: bold;
+    }
+    .badge.bill { background: #fef3c7; color: #92400e; }
+    .badge.warranty { background: #dbeafe; color: #1e40af; }
+    .actions { display: flex; gap: 0.5rem; align-items: center; }
+    .cal-btn { background: #16a34a; font-size: 0.85rem; }
+    .del-btn { background: #ef4444; font-size: 0.85rem; }
+    .expired { color: #dc2626; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>📋 Bill & Warranty Tracker</h1>
+    <p>Zero-setup tracker saved safely in your browser</p>
+  </header>
+
+  <section class="card">
+    <h2>Add New Entry</h2>
+    <form id="trackerForm">
+      <div class="form-group">
+        <label for="title">Title / Item Name</label>
+        <input type="text" id="title" placeholder="e.g., Laptop Warranty or Netflix" required />
+      </div>
+      <div class="form-group">
+        <label for="type">Type</label>
+        <select id="type">
+          <option value="warranty">Warranty Expiry</option>
+          <option value="bill">Payment / Subscription</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="amount">Amount ($)</label>
+        <input type="number" step="0.01" id="amount" placeholder="0.00" />
+      </div>
+      <div class="form-group">
+        <label for="expiryDate">Expiration / Due Date</label>
+        <input type="date" id="expiryDate" required />
+      </div>
+      <button type="submit" style="grid-column: 1 / -1;">Save Item</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Your Tracked Records</h2>
+    <div id="itemsContainer" style="margin-top: 1rem;"></div>
+  </section>
+
+  <script>
+    const form = document.getElementById('trackerForm');
+    const container = document.getElementById('itemsContainer');
+
+    // Load items from Browser LocalStorage
+    let items = JSON.parse(localStorage.getItem('vaultItems') || '[]');
+
+    function saveAndRender() {
+      localStorage.setItem('vaultItems', JSON.stringify(items));
+      render();
+    }
+
+    function render() {
+      container.innerHTML = '';
+      if (items.length === 0) {
+        container.innerHTML = '<p style="color: #64748b;">No items added yet.</p>';
+        return;
+      }
+
+      items.forEach((item, index) => {
+        const isExpired = new Date(item.expiryDate) < new Date();
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'item-card';
+        
+        // Generate Google Calendar Link for Email Reminders
+        const calDate = item.expiryDate.replace(/-/g, '');
+        const calUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(item.type.toUpperCase() + ': ' + item.title)}&dates=${calDate}/${calDate}&details=${encodeURIComponent('Reminder: Expiration or due date for ' + item.title)}`;
+
+        itemDiv.innerHTML = `
+          <div>
+            <h3>${item.title} <span class="badge ${item.type}">${item.type.toUpperCase()}</span></h3>
+            <p>Due/Expires: <strong>${item.expiryDate}</strong> ${isExpired ? '<span class="expired">(Expired)</span>' : ''}</p>
+            ${item.amount ? `<p>Cost: $${parseFloat(item.amount).toFixed(2)}</p>` : ''}
+          </div>
+          <div class="actions">
+            <a href="${calUrl}" target="_blank" style="text-decoration:none;">
+              <button class="cal-btn" type="button">🔔 Add Google Reminder</button>
+            </a>
+            <button class="del-btn" onclick="deleteItem(${index})">Delete</button>
+          </div>
+        `;
+        container.appendChild(itemDiv);
+      });
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const newItem = {
+        title: document.getElementById('title').value,
+        type: document.getElementById('type').value,
+        amount: document.getElementById('amount').value,
+        expiryDate: document.getElementById('expiryDate').value
+      };
+      items.push(newItem);
+      form.reset();
+      saveAndRender();
+    });
+
+    window.deleteItem = function(index) {
+      items.splice(index, 1);
+      saveAndRender();
+    };
+
+    render();
+  </script>
+</body>
+</html>
